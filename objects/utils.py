@@ -3,8 +3,8 @@
 from typing import Optional
 from typing import TYPE_CHECKING
 
-from cmyui.logging import Ansi
-from cmyui.logging import log
+from objects.logging import Ansi
+from objects.logging import log
 from pathlib import Path
 from quart import render_template
 from quart import session
@@ -158,8 +158,8 @@ def crop_image(image: 'Image') -> 'Image':
     offset = int(abs(height-width) / 2)
 
     if width > height:
-        image = image.crop([offset, 0, width-offset, height])
+        image = image.crop((offset, 0, width-offset, height))
     else:
-        image = image.crop([0, offset, width, height-offset])
+        image = image.crop((0, offset, width, height-offset))
 
     return image

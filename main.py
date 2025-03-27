@@ -1,4 +1,4 @@
-#!/usr/bin/env python3.9
+#!/usr/bin/env python3.11
 # -*- coding: utf-8 -*-
 
 __all__ = ()
@@ -6,20 +6,21 @@ __all__ = ()
 import os
 
 import aiohttp
+import objects.logging
 import orjson
 from quart import Quart
 from quart import render_template
 
-from cmyui.logging import Ansi
-from cmyui.logging import log
-from cmyui.mysql import AsyncSQLPool
-from cmyui.version import Version
+from objects.logging import Ansi
+from objects.logging import log
+
+from adapters.database import Database
 
 from objects import glob
 
 app = Quart(__name__)
 
-version = Version(1, 3, 0)
+objects.logging.configure_logging()
 
 # used to secure session data.
 # we recommend using a long randomly generated ascii string.
@@ -27,8 +28,8 @@ app.secret_key = glob.config.secret_key
 
 @app.before_serving
 async def mysql_conn() -> None:
-    glob.db = AsyncSQLPool()
-    await glob.db.connect(glob.config.mysql) # type: ignore
+    glob.db = Database(glob.config.db_dsn)
+    await glob.db.connect()
     log('Connected to MySQL!', Ansi.LGREEN)
 
 @app.before_serving
@@ -38,13 +39,13 @@ async def http_conn() -> None:
 
 @app.after_serving
 async def shutdown() -> None:
-    await glob.db.close()
+    await glob.db.disconnect()
     await glob.http.close()
 
 # globals which can be used in template code
 @app.template_global()
 def appVersion() -> str:
-    return repr(version)
+    return glob.config.version
 
 @app.template_global()
 def appName() -> str:

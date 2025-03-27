@@ -26,15 +26,15 @@ async def home():
         return await flash('error', f'You have insufficient privileges.', 'home')
 
     # fetch data from database
-    dash_data = await glob.db.fetch(
+    dash_data = await glob.db.fetch_one(
         'SELECT COUNT(id) count, '
         '(SELECT name FROM users ORDER BY id DESC LIMIT 1) lastest_user, '
         '(SELECT COUNT(id) FROM users WHERE NOT priv & 1) banned '
         'FROM users'
     )
 
-    recent_users = await glob.db.fetchall('SELECT * FROM users ORDER BY id DESC LIMIT 5')
-    recent_scores = await glob.db.fetchall(
+    recent_users = await glob.db.fetch_all('SELECT * FROM users ORDER BY id DESC LIMIT 5')
+    recent_scores = await glob.db.fetch_all(
         'SELECT scores.*, maps.artist, maps.title, '
         'maps.set_id, maps.creator, maps.version '
         'FROM scores JOIN maps ON scores.map_md5 = maps.md5 '

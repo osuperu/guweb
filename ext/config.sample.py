@@ -1,5 +1,7 @@
 # -*- coding: utf-8 -*-
 
+import tomllib
+
 # app name
 app_name = 'guweb'
 
@@ -24,11 +26,15 @@ mysql = {
     'password': 'changeme',
 }
 
+db_dsn = f"mysql://{mysql['user']}:{mysql['password']}@{mysql['host']}/{mysql['db']}"
+
 # path to gulag root (must have leading and following slash)
 path_to_gulag = '/path/to/gulag/'
 
 # enable debug (disable when in production to improve performance)
 debug = False
+
+log_with_colors = True
 
 # disallowed names (hardcoded banned usernames)
 disallowed_names = {
@@ -50,3 +56,6 @@ discord_server = 'https://discord.com/invite/Y5uPvcNpD9'
 youtube = 'https://youtube.com/'
 twitter = 'https://twitter.com/'
 instagram = 'https://instagram.com/'
+
+with open("pyproject.toml", "rb") as f:
+    version = tomllib.load(f)["tool"]["poetry"]["version"]

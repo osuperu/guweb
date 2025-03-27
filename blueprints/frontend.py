@@ -7,8 +7,8 @@ import hashlib
 import os
 import time
 
-from cmyui.logging import Ansi
-from cmyui.logging import log
+from objects.logging import Ansi
+from objects.logging import log
 from functools import wraps
 from PIL import Image
 from pathlib import Path
@@ -93,7 +93,7 @@ async def settings_profile_post():
         if new_name in glob.config.disallowed_names:
             return await flash('error', "Your new username isn't allowed; pick another.", 'settings/profile')
 
-        if await glob.db.fetch('SELECT 1 FROM users WHERE name = %s', [new_name]):
+        if await glob.db.fetch_one('SELECT 1 FROM users WHERE name = :name', {'name': new_name}):
             return await flash('error', 'Your new username already taken by another user.', 'settings/profile')
 
         safe_name = utils.get_safe_name(new_name)
@@ -101,9 +101,9 @@ async def settings_profile_post():
         # username change successful
         await glob.db.execute(
             'UPDATE users '
-            'SET name = %s, safe_name = %s '
-            'WHERE id = %s',
-            [new_name, safe_name, session['user_data']['id']]
+            'SET name = :name, safe_name = :safe_name '
+            'WHERE id = :id',
+            {'name': new_name, 'safe_name': safe_name, 'id': session['user_data']['id']}
         )
 
     if new_email != old_email:
@@ -113,15 +113,15 @@ async def settings_profile_post():
         if not regexes.email.match(new_email):
             return await flash('error', 'Your new email syntax is invalid.', 'settings/profile')
 
-        if await glob.db.fetch('SELECT 1 FROM users WHERE email = %s', [new_email]):
+        if await glob.db.fetch_one('SELECT 1 FROM users WHERE email = :email', {'email': new_email}):
             return await flash('error', 'Your new email already taken by another user.', 'settings/profile')
 
         # email change successful
         await glob.db.execute(
             'UPDATE users '
-            'SET email = %s '
-            'WHERE id = %s',
-            [new_email, session['user_data']['id']]
+            'SET email = :email '
+            'WHERE id = :id',
+            {'email': new_email, 'id': session['user_data']['id']}
         )
 
     # logout
@@ -234,6 +234,10 @@ async def settings_password_post():
     old_password = form.get('old_password')
     new_password = form.get('new_password')
     repeat_password = form.get('repeat_password')
+    
+    assert old_password is not None
+    assert new_password is not None
+    assert repeat_password is not None
 
     # new password and repeat password don't match; deny post
     if new_password != repeat_password:
@@ -258,12 +262,16 @@ async def settings_password_post():
 
     # cache and other password related information
     bcrypt_cache = glob.cache['bcrypt']
-    pw_bcrypt = (await glob.db.fetch(
+    pw_bcrypt = await glob.db.fetch_one(
         'SELECT pw_bcrypt '
         'FROM users '
-        'WHERE id = %s',
-        [session['user_data']['id']])
-    )['pw_bcrypt'].encode()
+        'WHERE id = :id',
+        {'id': session['user_data']['id']}
+    )
+    
+    assert pw_bcrypt is not None
+    
+    pw_bcrypt = pw_bcrypt['pw_bcrypt'].encode()
 
     pw_md5 = hashlib.md5(old_password.encode()).hexdigest().encode()
 
@@ -292,9 +300,9 @@ async def settings_password_post():
     bcrypt_cache[pw_bcrypt] = pw_md5
     await glob.db.execute(
         'UPDATE users '
-        'SET pw_bcrypt = %s '
-        'WHERE safe_name = %s',
-        [pw_bcrypt, utils.get_safe_name(session['user_data']['name'])]
+        'SET pw_bcrypt = :pw_bcrypt '
+        'WHERE safe_name = :safe_name',
+        {'pw_bcrypt': pw_bcrypt, 'safe_name': utils.get_safe_name(session['user_data']['name'])}
     )
 
     # logout
@@ -308,11 +316,11 @@ async def profile_select(id):
 
     mode = request.args.get('mode', 'std', type=str) # 1. key 2. default value
     mods = request.args.get('mods', 'vn', type=str)
-    user_data = await glob.db.fetch(
+    user_data = await glob.db.fetch_one(
         'SELECT name, safe_name, id, priv, country '
         'FROM users '
-        'WHERE safe_name = %s OR id = %s LIMIT 1',
-        [utils.get_safe_name(id), id]
+        'WHERE safe_name = :safe_name OR id = :id LIMIT 1',
+        {"safe_name": utils.get_safe_name(id), "id": id}
     )
 
     # no user
@@ -364,12 +372,12 @@ async def login_post():
         return await flash('error', 'Invalid parameters.', 'home')
 
     # check if account exists
-    user_info = await glob.db.fetch(
+    user_info = await glob.db.fetch_one(
         'SELECT id, name, email, priv, '
         'pw_bcrypt, silence_end '
         'FROM users '
-        'WHERE safe_name = %s',
-        [utils.get_safe_name(username)]
+        'WHERE safe_name = :safe_name',
+        {"safe_name": utils.get_safe_name(username)}
     )
 
     # user doesn't exist; deny post
@@ -428,7 +436,7 @@ async def login_post():
     }
 
     if glob.config.debug:
-        login_time = (time.time_ns() - login_time) / 1e6
+        login_time = (time.time_ns() - login_time) / 1e6 # type: ignore
         log(f'Login took {login_time:.2f}ms!', Ansi.LYELLOW)
 
     return await flash('success', f'Hey, welcome back {username}!', 'home')
@@ -482,7 +490,7 @@ async def register_post():
     if username in glob.config.disallowed_names:
         return await flash('error', 'Disallowed username; pick another.', 'register')
 
-    if await glob.db.fetch('SELECT 1 FROM users WHERE name = %s', username):
+    if await glob.db.fetch_one('SELECT 1 FROM users WHERE name = :name', {'name': username}):
         return await flash('error', 'Username already taken by another user.', 'register')
 
     # Emails must:
@@ -491,7 +499,7 @@ async def register_post():
     if not regexes.email.match(email):
         return await flash('error', 'Invalid email syntax.', 'register')
 
-    if await glob.db.fetch('SELECT 1 FROM users WHERE email = %s', email):
+    if await glob.db.fetch_one('SELECT 1 FROM users WHERE email = :email', {'email': email}):
         return await flash('error', 'Email already taken by another user.', 'register')
 
     # Passwords must:
@@ -527,33 +535,29 @@ async def register_post():
     if country != 'pe':
         return await flash('error', 'You must be in Peru to register.', 'register')
 
-    async with glob.db.pool.acquire() as conn:
-        async with conn.cursor() as db_cursor:
-            # add to `users` table.
-            await db_cursor.execute(
-                'INSERT INTO users '
-                '(name, safe_name, email, pw_bcrypt, country, creation_time, latest_activity) '
-                'VALUES (%s, %s, %s, %s, %s, UNIX_TIMESTAMP(), UNIX_TIMESTAMP())',
-                [username, safe_name, email, pw_bcrypt, country]
-            )
-            user_id = db_cursor.lastrowid
-
-            # add to `stats` table.
-            await db_cursor.executemany(
-                'INSERT INTO stats '
-                '(id, mode) VALUES (%s, %s)',
-                [(user_id, mode) for mode in (
-                    0,  # vn!std
-                    1,  # vn!taiko
-                    2,  # vn!catch
-                    3,  # vn!mania
-                    4,  # rx!std
-                    5,  # rx!taiko
-                    6,  # rx!catch
-                    8,  # ap!std
-                )]
-            )
-
+    async with glob.db.transaction():
+        # add to `users` table.
+        user_id = await glob.db.execute(
+            'INSERT INTO users '
+            '(name, safe_name, email, pw_bcrypt, country, creation_time, latest_activity) '
+            'VALUES (:username, :safe_name, :email, :pw_bcrypt, :country, UNIX_TIMESTAMP(), UNIX_TIMESTAMP())',
+            {'username': username, 'safe_name': safe_name, 'email': email, 'pw_bcrypt': pw_bcrypt, 'country': country}
+        )
+        
+        await glob.db.execute_many(
+            'INSERT INTO stats (id, mode) VALUES (:id, :mode)',
+            [{'id': user_id, 'mode': mode} for mode in (
+                0,  # vn!std
+                1,  # vn!taiko
+                2,  # vn!catch
+                3,  # vn!mania
+                4,  # rx!std
+                5,  # rx!taiko
+                6,  # rx!catch
+                8,  # ap!std
+            )]
+        )
+        
     # (end of lock)
 
     if glob.config.debug:
