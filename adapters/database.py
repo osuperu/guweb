@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-import common.settings
-
 from typing import Any
 from typing import cast
 
@@ -11,6 +9,7 @@ from sqlalchemy.dialects.mysql.mysqldb import MySQLDialect_mysqldb
 from sqlalchemy.sql.compiler import Compiled
 from sqlalchemy.sql.expression import ClauseElement
 
+import common.settings
 from common.logging import log
 from common.timer import Timer
 

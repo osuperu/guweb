@@ -1,3 +1,8 @@
+[tool.isort]
+add_imports = ["from __future__ import annotations"]
+force_single_line = true
+profile = "black"
+
 [tool.poetry]
 name = "guweb"
 version = "2.0.0"
@@ -5,7 +10,6 @@ description = ""
 authors = ["Akatsuki Team"]
 readme = "README.md"
 packages = [{ include = "bancho" }]
-
 
 [tool.poetry.dependencies]
 python = "^3.11"
@@ -22,6 +26,17 @@ databases = "0.8.0"
 pyyaml = "^6.0.2"
 sqlalchemy = "1.4.53"
 python-dotenv = "^1.1.0"
+
+[tool.poetry.group.dev.dependencies]
+pre-commit = "3.6.1"
+black = "24.1.1"
+isort = "5.13.2"
+autoflake = "2.2.1"
+types-psutil = "5.9.5.20240205"
+types-pymysql = "1.1.0.1"
+types-requests = "2.31.0.20240125"
+types-pyyaml = "^6.0.12.12"
+sqlalchemy2-stubs = "^0.0.2a38"
 
 [build-system]
 requires = ["poetry-core"]

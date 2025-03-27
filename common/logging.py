@@ -3,14 +3,13 @@ from __future__ import annotations
 import datetime
 import logging.config
 import re
-
-import common.settings
-
 from collections.abc import Mapping
 from enum import IntEnum
 from zoneinfo import ZoneInfo
 
 import yaml
+
+import common.settings
 
 
 def configure_logging() -> None:
