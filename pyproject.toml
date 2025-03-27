@@ -21,6 +21,7 @@ pillow = "^11.1.0"
 databases = "0.8.0"
 pyyaml = "^6.0.2"
 sqlalchemy = "1.4.53"
+python-dotenv = "^1.1.0"
 
 [build-system]
 requires = ["poetry-core"]

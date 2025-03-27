@@ -3,6 +3,9 @@ from __future__ import annotations
 import datetime
 import logging.config
 import re
+
+import objects.settings
+
 from collections.abc import Mapping
 from enum import IntEnum
 from zoneinfo import ZoneInfo
@@ -80,7 +83,7 @@ def log(
     else:
         log_level = logging.INFO
 
-    if glob.config.log_with_colors:
+    if objects.settings.LOG_WITH_COLORS:
         color_prefix = f"{start_color!r}" if start_color is not None else ""
         color_suffix = f"{Ansi.RESET!r}" if start_color is not None else ""
     else:

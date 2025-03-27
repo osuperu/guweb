@@ -7,6 +7,7 @@ import os
 
 import aiohttp
 import objects.logging
+import objects.settings
 import orjson
 from quart import Quart
 from quart import render_template
@@ -24,11 +25,11 @@ objects.logging.configure_logging()
 
 # used to secure session data.
 # we recommend using a long randomly generated ascii string.
-app.secret_key = glob.config.secret_key
+app.secret_key = objects.settings.SECRET_KEY
 
 @app.before_serving
 async def mysql_conn() -> None:
-    glob.db = Database(glob.config.db_dsn)
+    glob.db = Database(objects.settings.DB_DSN)
     await glob.db.connect()
     log('Connected to MySQL!', Ansi.LGREEN)
 
@@ -45,19 +46,19 @@ async def shutdown() -> None:
 # globals which can be used in template code
 @app.template_global()
 def appVersion() -> str:
-    return glob.config.version
+    return objects.settings.VERSION
 
 @app.template_global()
 def appName() -> str:
-    return glob.config.app_name
+    return objects.settings.APP_NAME
 
 @app.template_global()
 def captchaKey() -> str:
-    return glob.config.hCaptcha_sitekey
+    return objects.settings.HCAPTCHA_SITE_KEY
 
 @app.template_global()
 def domain() -> str:
-    return glob.config.domain
+    return objects.settings.DOMAIN
 
 from blueprints.frontend import frontend
 app.register_blueprint(frontend)
@@ -72,4 +73,4 @@ async def page_not_found(e):
 
 if __name__ == '__main__':
     os.chdir(os.path.dirname(os.path.realpath(__file__)))
-    app.run(port=8000, debug=glob.config.debug) # blocking call
+    app.run(port=8000, debug=objects.settings.DEBUG) # blocking call

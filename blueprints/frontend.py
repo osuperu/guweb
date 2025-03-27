@@ -7,6 +7,8 @@ import hashlib
 import os
 import time
 
+import objects.settings
+
 from objects.logging import Ansi
 from objects.logging import log
 from functools import wraps
@@ -90,7 +92,7 @@ async def settings_profile_post():
         if '_' in new_name and ' ' in new_name:
             return await flash('error', 'Your new username may contain "_" or " ", but not both.', 'settings/profile')
 
-        if new_name in glob.config.disallowed_names:
+        if new_name in objects.settings.DISALLOWED_USERNAMES:
             return await flash('error', "Your new username isn't allowed; pick another.", 'settings/profile')
 
         if await glob.db.fetch_one('SELECT 1 FROM users WHERE name = :name', {'name': new_name}):
@@ -138,8 +140,8 @@ async def settings_avatar():
 @login_required
 async def settings_avatar_post():
     # constants
-    MAX_IMAGE_SIZE = glob.config.max_image_size * 1024 * 1024
-    AVATARS_PATH = f'{glob.config.path_to_gulag}.data/avatars'
+    MAX_IMAGE_SIZE = objects.settings.MAX_IMAGE_SIZE * 1024 * 1024
+    AVATARS_PATH = f'{objects.settings.PATH_TO_BPY}.data/avatars'
     ALLOWED_EXTENSIONS = ['.jpeg', '.jpg', '.png']
 
     avatar = (await request.files).get('avatar')
@@ -257,7 +259,7 @@ async def settings_password_post():
     if len(set(new_password)) <= 3:
         return await flash('error', 'Your new password must have more than 3 unique characters.', 'settings/password')
 
-    if new_password.lower() in glob.config.disallowed_passwords:
+    if new_password.lower() in objects.settings.DISALLOWED_PASSWORDS:
         return await flash('error', 'Your new password was deemed too simple.', 'settings/password')
 
     # cache and other password related information
@@ -279,12 +281,12 @@ async def settings_password_post():
     # intentionally slow, will cache to speed up
     if pw_bcrypt in bcrypt_cache:
         if pw_md5 != bcrypt_cache[pw_bcrypt]: # ~0.1ms
-            if glob.config.debug:
+            if objects.settings.DEBUG:
                 log(f"{session['user_data']['name']}'s change pw failed - pw incorrect.", Ansi.LYELLOW)
             return await flash('error', 'Your old password is incorrect.', 'settings/password')
     else: # ~200ms
         if not bcrypt.checkpw(pw_md5, pw_bcrypt):
-            if glob.config.debug:
+            if objects.settings.DEBUG:
                 log(f"{session['user_data']['name']}'s change pw failed - pw incorrect.", Ansi.LYELLOW)
             return await flash('error', 'Your old password is incorrect.', 'settings/password')
 
@@ -361,7 +363,7 @@ async def login_post():
     if 'authenticated' in session:
         return await flash('error', "You're already logged in!", 'home')
 
-    if glob.config.debug:
+    if objects.settings.DEBUG:
         login_time = time.time_ns()
 
     form = await request.form
@@ -383,7 +385,7 @@ async def login_post():
     # user doesn't exist; deny post
     # NOTE: Bot isn't a user.
     if not user_info or user_info['id'] == 1:
-        if glob.config.debug:
+        if objects.settings.DEBUG:
             log(f"{username}'s login failed - account doesn't exist.", Ansi.LYELLOW)
         return await flash('error', 'Account does not exist.', 'login')
 
@@ -396,12 +398,12 @@ async def login_post():
     # intentionally slow, will cache to speed up
     if pw_bcrypt in bcrypt_cache:
         if pw_md5 != bcrypt_cache[pw_bcrypt]: # ~0.1ms
-            if glob.config.debug:
+            if objects.settings.DEBUG:
                 log(f"{username}'s login failed - pw incorrect.", Ansi.LYELLOW)
             return await flash('error', 'Password is incorrect.', 'login')
     else: # ~200ms
         if not bcrypt.checkpw(pw_md5, pw_bcrypt):
-            if glob.config.debug:
+            if objects.settings.DEBUG:
                 log(f"{username}'s login failed - pw incorrect.", Ansi.LYELLOW)
             return await flash('error', 'Password is incorrect.', 'login')
 
@@ -410,18 +412,18 @@ async def login_post():
 
     # user not verified; render verify
     if not user_info['priv'] & Privileges.Verified:
-        if glob.config.debug:
+        if objects.settings.DEBUG:
             log(f"{username}'s login failed - not verified.", Ansi.LYELLOW)
         return await render_template('verify.html')
 
     # user banned; deny post
     if not user_info['priv'] & Privileges.Normal:
-        if glob.config.debug:
+        if objects.settings.DEBUG:
             log(f"{username}'s login failed - banned.", Ansi.RED)
         return await flash('error', 'Your account is restricted. You are not allowed to log in.', 'login')
 
     # login successful; store session data
-    if glob.config.debug:
+    if objects.settings.DEBUG:
         log(f"{username}'s login succeeded.", Ansi.LGREEN)
 
     session['authenticated'] = True
@@ -435,7 +437,7 @@ async def login_post():
         'is_donator': user_info['priv'] & Privileges.Donator != 0
     }
 
-    if glob.config.debug:
+    if objects.settings.DEBUG:
         login_time = (time.time_ns() - login_time) / 1e6 # type: ignore
         log(f'Login took {login_time:.2f}ms!', Ansi.LYELLOW)
 
@@ -446,7 +448,7 @@ async def register():
     if 'authenticated' in session:
         return await flash('error', "You're already logged in.", 'home')
 
-    if not glob.config.registration:
+    if not objects.settings.ALLOW_REGISTRATION:
         return await flash('error', 'Registrations are currently disabled.', 'home')
 
     return await render_template('register.html')
@@ -456,7 +458,7 @@ async def register_post():
     if 'authenticated' in session:
         return await flash('error', "You're already logged in.", 'home')
 
-    if not glob.config.registration:
+    if not objects.settings.ALLOW_REGISTRATION:
         return await flash('error', 'Registrations are currently disabled.', 'home')
 
     form = await request.form
@@ -467,7 +469,7 @@ async def register_post():
     if username is None or email is None or passwd_txt is None:
         return await flash('error', 'Invalid parameters.', 'home')
 
-    if glob.config.hCaptcha_sitekey != 'changeme':
+    if objects.settings.HCAPTCHA_SITE_KEY != 'changeme':
         captcha_data = form.get('h-captcha-response', type=str)
         if (
             captcha_data is None or
@@ -487,7 +489,7 @@ async def register_post():
     if '_' in username and ' ' in username:
         return await flash('error', 'Username may contain "_" or " ", but not both.', 'register')
 
-    if username in glob.config.disallowed_names:
+    if username in objects.settings.DISALLOWED_USERNAMES:
         return await flash('error', 'Disallowed username; pick another.', 'register')
 
     if await glob.db.fetch_one('SELECT 1 FROM users WHERE name = :name', {'name': username}):
@@ -512,7 +514,7 @@ async def register_post():
     if len(set(passwd_txt)) <= 3:
         return await flash('error', 'Password must have more than 3 unique characters.', 'register')
 
-    if passwd_txt.lower() in glob.config.disallowed_passwords:
+    if passwd_txt.lower() in objects.settings.DISALLOWED_PASSWORDS:
         return await flash('error', 'That password was deemed too simple.', 'register')
 
     # TODO: add correct locking
@@ -560,7 +562,7 @@ async def register_post():
         
     # (end of lock)
 
-    if glob.config.debug:
+    if objects.settings.DEBUG:
         log(f'{username} has registered - awaiting verification.', Ansi.LGREEN)
 
     # user has successfully registered
@@ -571,7 +573,7 @@ async def logout():
     if 'authenticated' not in session:
         return await flash('error', "You can't logout if you aren't logged in!", 'login')
 
-    if glob.config.debug:
+    if objects.settings.DEBUG:
         log(f'{session["user_data"]["name"]} logged out.', Ansi.LGREEN)
 
     # clear session data
@@ -586,25 +588,25 @@ async def logout():
 @frontend.route('/github')
 @frontend.route('/gh')
 async def github_redirect():
-    return redirect(glob.config.github)
+    return redirect(objects.settings.GITHUB)
 
 @frontend.route('/discord')
 async def discord_redirect():
-    return redirect(glob.config.discord_server)
+    return redirect(objects.settings.DISCORD_SERVER)
 
 @frontend.route('/youtube')
 @frontend.route('/yt')
 async def youtube_redirect():
-    return redirect(glob.config.youtube)
+    return redirect(objects.settings.YOUTUBE)
 
 @frontend.route('/twitter')
 async def twitter_redirect():
-    return redirect(glob.config.twitter)
+    return redirect(objects.settings.TWITTER)
 
 @frontend.route('/instagram')
 @frontend.route('/ig')
 async def instagram_redirect():
-    return redirect(glob.config.instagram)
+    return redirect(objects.settings.INSTAGRAM)
 
 # profile customisation
 BANNERS_PATH = Path.cwd() / '.data/banners'

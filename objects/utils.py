@@ -1,5 +1,7 @@
 # -*- coding: utf-8 -*-
 
+import objects.settings
+
 from typing import Optional
 from typing import TYPE_CHECKING
 
@@ -70,12 +72,12 @@ async def fetch_geoloc(ip: str) -> str:
 
     async with glob.http.get(url) as resp:
         if not resp or resp.status != 200:
-            if glob.config.debug:
+            if objects.settings.DEBUG:
                 log('Failed to get geoloc data: request failed.', Ansi.LRED)
             return 'xx'
         status, *lines = (await resp.text()).split('\n')
         if status != 'success':
-            if glob.config.debug:
+            if objects.settings.DEBUG:
                 log(f'Failed to get geoloc data: {lines[0]}.', Ansi.LRED)
             return 'xx'
         return lines[1].lower()
@@ -85,13 +87,13 @@ async def validate_captcha(data: str) -> bool:
     url = f'https://hcaptcha.com/siteverify'
 
     request_data = {
-        'secret': glob.config.hCaptcha_secret,
+        'secret': objects.settings.HCAPTCHA_SECRET,
         'response': data
     }
 
     async with glob.http.post(url, data=request_data) as resp:
         if not resp or resp.status != 200:
-            if glob.config.debug:
+            if objects.settings.DEBUG:
                 log('Failed to verify captcha: request failed.', Ansi.LRED)
             return False
 
