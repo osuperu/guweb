@@ -523,6 +523,9 @@ async def register_post():
         country = await utils.fetch_geoloc(ip)
     else:
         country = 'xx'
+    
+    if country != 'pe':
+        return await flash('error', 'You must be in Peru to register.', 'register')
 
     async with glob.db.pool.acquire() as conn:
         async with conn.cursor() as db_cursor:
