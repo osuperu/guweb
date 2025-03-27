@@ -5,21 +5,12 @@ __all__ = ()
 
 import os
 
-import aiohttp
 import common.logging
 import common.settings
-import orjson
-import state
 from quart import Quart
 from quart import render_template
 
-from common.logging import Ansi
-from common.logging import log
-
-from adapters.database import Database
-
-import state.clients
-
+from common import lifecycle
 
 app = Quart(__name__)
 
@@ -30,19 +21,12 @@ common.logging.configure_logging()
 app.secret_key = common.settings.SECRET_KEY
 
 @app.before_serving
-async def mysql_conn() -> None:
-    await state.clients.database.connect()
-    log('Connected to MySQL!', Ansi.LGREEN)
-
-@app.before_serving
-async def http_conn() -> None:
-    state.clients.http_client = aiohttp.ClientSession(json_serialize=lambda x: orjson.dumps(x).decode())
-    log('Got our Client Session!', Ansi.LGREEN)
+async def startup() -> None:
+    await lifecycle.start()
 
 @app.after_serving
 async def shutdown() -> None:
-    await state.clients.database.disconnect()
-    await state.clients.http_client.close()
+    await lifecycle.shutdown()
 
 # globals which can be used in template code
 @app.template_global()
