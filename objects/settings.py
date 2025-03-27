@@ -13,6 +13,9 @@ load_dotenv()
 
 APP_NAME = os.environ["APP_NAME"]
 
+APP_HOST = os.environ["APP_HOST"]
+APP_PORT = int(os.environ["APP_PORT"])
+
 SECRET_KEY = os.environ["SECRET_KEY"]
 
 HCAPTCHA_SITE_KEY = os.environ["HCAPTCHA_SITE_KEY"]
