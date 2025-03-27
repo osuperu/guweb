@@ -7,10 +7,10 @@ import hashlib
 import os
 import time
 
-import objects.settings
+import common.settings
 
-from objects.logging import Ansi
-from objects.logging import log
+from common.logging import Ansi
+from common.logging import log
 from functools import wraps
 from PIL import Image
 from pathlib import Path
@@ -22,11 +22,12 @@ from quart import session
 from quart import send_file
 
 from constants import regexes
-from objects import glob
-from objects import utils
-from objects.privileges import Privileges
-from objects.utils import flash
-from objects.utils import flash_with_customizations
+from common import utils
+from common.privileges import Privileges
+from common.utils import flash
+from common.utils import flash_with_customizations
+import state.cache
+import state.clients
 
 VALID_MODES = frozenset({'std', 'taiko', 'catch', 'mania'})
 VALID_MODS = frozenset({'vn', 'rx', 'ap'})
@@ -92,16 +93,16 @@ async def settings_profile_post():
         if '_' in new_name and ' ' in new_name:
             return await flash('error', 'Your new username may contain "_" or " ", but not both.', 'settings/profile')
 
-        if new_name in objects.settings.DISALLOWED_USERNAMES:
+        if new_name in common.settings.DISALLOWED_USERNAMES:
             return await flash('error', "Your new username isn't allowed; pick another.", 'settings/profile')
 
-        if await glob.db.fetch_one('SELECT 1 FROM users WHERE name = :name', {'name': new_name}):
+        if await state.clients.database.fetch_one('SELECT 1 FROM users WHERE name = :name', {'name': new_name}):
             return await flash('error', 'Your new username already taken by another user.', 'settings/profile')
 
         safe_name = utils.get_safe_name(new_name)
 
         # username change successful
-        await glob.db.execute(
+        await state.clients.database.execute(
             'UPDATE users '
             'SET name = :name, safe_name = :safe_name '
             'WHERE id = :id',
@@ -115,11 +116,11 @@ async def settings_profile_post():
         if not regexes.email.match(new_email):
             return await flash('error', 'Your new email syntax is invalid.', 'settings/profile')
 
-        if await glob.db.fetch_one('SELECT 1 FROM users WHERE email = :email', {'email': new_email}):
+        if await state.clients.database.fetch_one('SELECT 1 FROM users WHERE email = :email', {'email': new_email}):
             return await flash('error', 'Your new email already taken by another user.', 'settings/profile')
 
         # email change successful
-        await glob.db.execute(
+        await state.clients.database.execute(
             'UPDATE users '
             'SET email = :email '
             'WHERE id = :id',
@@ -140,8 +141,8 @@ async def settings_avatar():
 @login_required
 async def settings_avatar_post():
     # constants
-    MAX_IMAGE_SIZE = objects.settings.MAX_IMAGE_SIZE * 1024 * 1024
-    AVATARS_PATH = f'{objects.settings.PATH_TO_BPY}.data/avatars'
+    MAX_IMAGE_SIZE = common.settings.MAX_IMAGE_SIZE * 1024 * 1024
+    AVATARS_PATH = f'{common.settings.PATH_TO_BPY}.data/avatars'
     ALLOWED_EXTENSIONS = ['.jpeg', '.jpg', '.png']
 
     avatar = (await request.files).get('avatar')
@@ -259,12 +260,12 @@ async def settings_password_post():
     if len(set(new_password)) <= 3:
         return await flash('error', 'Your new password must have more than 3 unique characters.', 'settings/password')
 
-    if new_password.lower() in objects.settings.DISALLOWED_PASSWORDS:
+    if new_password.lower() in common.settings.DISALLOWED_PASSWORDS:
         return await flash('error', 'Your new password was deemed too simple.', 'settings/password')
 
     # cache and other password related information
-    bcrypt_cache = glob.cache['bcrypt']
-    pw_bcrypt = await glob.db.fetch_one(
+    bcrypt_cache = state.cache.bcrypt
+    pw_bcrypt = await state.clients.database.fetch_one(
         'SELECT pw_bcrypt '
         'FROM users '
         'WHERE id = :id',
@@ -281,12 +282,12 @@ async def settings_password_post():
     # intentionally slow, will cache to speed up
     if pw_bcrypt in bcrypt_cache:
         if pw_md5 != bcrypt_cache[pw_bcrypt]: # ~0.1ms
-            if objects.settings.DEBUG:
+            if common.settings.DEBUG:
                 log(f"{session['user_data']['name']}'s change pw failed - pw incorrect.", Ansi.LYELLOW)
             return await flash('error', 'Your old password is incorrect.', 'settings/password')
     else: # ~200ms
         if not bcrypt.checkpw(pw_md5, pw_bcrypt):
-            if objects.settings.DEBUG:
+            if common.settings.DEBUG:
                 log(f"{session['user_data']['name']}'s change pw failed - pw incorrect.", Ansi.LYELLOW)
             return await flash('error', 'Your old password is incorrect.', 'settings/password')
 
@@ -300,7 +301,7 @@ async def settings_password_post():
 
     # update password in cache and db
     bcrypt_cache[pw_bcrypt] = pw_md5
-    await glob.db.execute(
+    await state.clients.database.execute(
         'UPDATE users '
         'SET pw_bcrypt = :pw_bcrypt '
         'WHERE safe_name = :safe_name',
@@ -318,7 +319,7 @@ async def profile_select(id):
 
     mode = request.args.get('mode', 'std', type=str) # 1. key 2. default value
     mods = request.args.get('mods', 'vn', type=str)
-    user_data = await glob.db.fetch_one(
+    user_data = await state.clients.database.fetch_one(
         'SELECT name, safe_name, id, priv, country '
         'FROM users '
         'WHERE safe_name = :safe_name OR id = :id LIMIT 1',
@@ -363,7 +364,7 @@ async def login_post():
     if 'authenticated' in session:
         return await flash('error', "You're already logged in!", 'home')
 
-    if objects.settings.DEBUG:
+    if common.settings.DEBUG:
         login_time = time.time_ns()
 
     form = await request.form
@@ -374,7 +375,7 @@ async def login_post():
         return await flash('error', 'Invalid parameters.', 'home')
 
     # check if account exists
-    user_info = await glob.db.fetch_one(
+    user_info = await state.clients.database.fetch_one(
         'SELECT id, name, email, priv, '
         'pw_bcrypt, silence_end '
         'FROM users '
@@ -385,12 +386,12 @@ async def login_post():
     # user doesn't exist; deny post
     # NOTE: Bot isn't a user.
     if not user_info or user_info['id'] == 1:
-        if objects.settings.DEBUG:
+        if common.settings.DEBUG:
             log(f"{username}'s login failed - account doesn't exist.", Ansi.LYELLOW)
         return await flash('error', 'Account does not exist.', 'login')
 
     # cache and other related password information
-    bcrypt_cache = glob.cache['bcrypt']
+    bcrypt_cache = state.cache.bcrypt
     pw_bcrypt = user_info['pw_bcrypt'].encode()
     pw_md5 = hashlib.md5(passwd_txt.encode()).hexdigest().encode()
 
@@ -398,12 +399,12 @@ async def login_post():
     # intentionally slow, will cache to speed up
     if pw_bcrypt in bcrypt_cache:
         if pw_md5 != bcrypt_cache[pw_bcrypt]: # ~0.1ms
-            if objects.settings.DEBUG:
+            if common.settings.DEBUG:
                 log(f"{username}'s login failed - pw incorrect.", Ansi.LYELLOW)
             return await flash('error', 'Password is incorrect.', 'login')
     else: # ~200ms
         if not bcrypt.checkpw(pw_md5, pw_bcrypt):
-            if objects.settings.DEBUG:
+            if common.settings.DEBUG:
                 log(f"{username}'s login failed - pw incorrect.", Ansi.LYELLOW)
             return await flash('error', 'Password is incorrect.', 'login')
 
@@ -412,18 +413,18 @@ async def login_post():
 
     # user not verified; render verify
     if not user_info['priv'] & Privileges.Verified:
-        if objects.settings.DEBUG:
+        if common.settings.DEBUG:
             log(f"{username}'s login failed - not verified.", Ansi.LYELLOW)
         return await render_template('verify.html')
 
     # user banned; deny post
     if not user_info['priv'] & Privileges.Normal:
-        if objects.settings.DEBUG:
+        if common.settings.DEBUG:
             log(f"{username}'s login failed - banned.", Ansi.RED)
         return await flash('error', 'Your account is restricted. You are not allowed to log in.', 'login')
 
     # login successful; store session data
-    if objects.settings.DEBUG:
+    if common.settings.DEBUG:
         log(f"{username}'s login succeeded.", Ansi.LGREEN)
 
     session['authenticated'] = True
@@ -437,7 +438,7 @@ async def login_post():
         'is_donator': user_info['priv'] & Privileges.Donator != 0
     }
 
-    if objects.settings.DEBUG:
+    if common.settings.DEBUG:
         login_time = (time.time_ns() - login_time) / 1e6 # type: ignore
         log(f'Login took {login_time:.2f}ms!', Ansi.LYELLOW)
 
@@ -448,7 +449,7 @@ async def register():
     if 'authenticated' in session:
         return await flash('error', "You're already logged in.", 'home')
 
-    if not objects.settings.ALLOW_REGISTRATION:
+    if not common.settings.ALLOW_REGISTRATION:
         return await flash('error', 'Registrations are currently disabled.', 'home')
 
     return await render_template('register.html')
@@ -458,7 +459,7 @@ async def register_post():
     if 'authenticated' in session:
         return await flash('error', "You're already logged in.", 'home')
 
-    if not objects.settings.ALLOW_REGISTRATION:
+    if not common.settings.ALLOW_REGISTRATION:
         return await flash('error', 'Registrations are currently disabled.', 'home')
 
     form = await request.form
@@ -469,7 +470,7 @@ async def register_post():
     if username is None or email is None or passwd_txt is None:
         return await flash('error', 'Invalid parameters.', 'home')
 
-    if objects.settings.HCAPTCHA_SITE_KEY != 'changeme':
+    if common.settings.HCAPTCHA_SITE_KEY != 'changeme':
         captcha_data = form.get('h-captcha-response', type=str)
         if (
             captcha_data is None or
@@ -489,10 +490,10 @@ async def register_post():
     if '_' in username and ' ' in username:
         return await flash('error', 'Username may contain "_" or " ", but not both.', 'register')
 
-    if username in objects.settings.DISALLOWED_USERNAMES:
+    if username in common.settings.DISALLOWED_USERNAMES:
         return await flash('error', 'Disallowed username; pick another.', 'register')
 
-    if await glob.db.fetch_one('SELECT 1 FROM users WHERE name = :name', {'name': username}):
+    if await state.clients.database.fetch_one('SELECT 1 FROM users WHERE name = :name', {'name': username}):
         return await flash('error', 'Username already taken by another user.', 'register')
 
     # Emails must:
@@ -501,7 +502,7 @@ async def register_post():
     if not regexes.email.match(email):
         return await flash('error', 'Invalid email syntax.', 'register')
 
-    if await glob.db.fetch_one('SELECT 1 FROM users WHERE email = :email', {'email': email}):
+    if await state.clients.database.fetch_one('SELECT 1 FROM users WHERE email = :email', {'email': email}):
         return await flash('error', 'Email already taken by another user.', 'register')
 
     # Passwords must:
@@ -514,14 +515,14 @@ async def register_post():
     if len(set(passwd_txt)) <= 3:
         return await flash('error', 'Password must have more than 3 unique characters.', 'register')
 
-    if passwd_txt.lower() in objects.settings.DISALLOWED_PASSWORDS:
+    if passwd_txt.lower() in common.settings.DISALLOWED_PASSWORDS:
         return await flash('error', 'That password was deemed too simple.', 'register')
 
     # TODO: add correct locking
     # (start of lock)
     pw_md5 = hashlib.md5(passwd_txt.encode()).hexdigest().encode()
     pw_bcrypt = bcrypt.hashpw(pw_md5, bcrypt.gensalt())
-    glob.cache['bcrypt'][pw_bcrypt] = pw_md5 # cache pw
+    state.cache.bcrypt[pw_bcrypt] = pw_md5 # cache pw
 
     safe_name = utils.get_safe_name(username)
 
@@ -537,16 +538,16 @@ async def register_post():
     if country != 'pe':
         return await flash('error', 'You must be in Peru to register.', 'register')
 
-    async with glob.db.transaction():
+    async with state.clients.database.transaction():
         # add to `users` table.
-        user_id = await glob.db.execute(
+        user_id = await state.clients.database.execute(
             'INSERT INTO users '
             '(name, safe_name, email, pw_bcrypt, country, creation_time, latest_activity) '
             'VALUES (:username, :safe_name, :email, :pw_bcrypt, :country, UNIX_TIMESTAMP(), UNIX_TIMESTAMP())',
             {'username': username, 'safe_name': safe_name, 'email': email, 'pw_bcrypt': pw_bcrypt, 'country': country}
         )
         
-        await glob.db.execute_many(
+        await state.clients.database.execute_many(
             'INSERT INTO stats (id, mode) VALUES (:id, :mode)',
             [{'id': user_id, 'mode': mode} for mode in (
                 0,  # vn!std
@@ -562,7 +563,7 @@ async def register_post():
         
     # (end of lock)
 
-    if objects.settings.DEBUG:
+    if common.settings.DEBUG:
         log(f'{username} has registered - awaiting verification.', Ansi.LGREEN)
 
     # user has successfully registered
@@ -573,7 +574,7 @@ async def logout():
     if 'authenticated' not in session:
         return await flash('error', "You can't logout if you aren't logged in!", 'login')
 
-    if objects.settings.DEBUG:
+    if common.settings.DEBUG:
         log(f'{session["user_data"]["name"]} logged out.', Ansi.LGREEN)
 
     # clear session data
@@ -588,25 +589,25 @@ async def logout():
 @frontend.route('/github')
 @frontend.route('/gh')
 async def github_redirect():
-    return redirect(objects.settings.GITHUB)
+    return redirect(common.settings.GITHUB)
 
 @frontend.route('/discord')
 async def discord_redirect():
-    return redirect(objects.settings.DISCORD_SERVER)
+    return redirect(common.settings.DISCORD_SERVER)
 
 @frontend.route('/youtube')
 @frontend.route('/yt')
 async def youtube_redirect():
-    return redirect(objects.settings.YOUTUBE)
+    return redirect(common.settings.YOUTUBE)
 
 @frontend.route('/twitter')
 async def twitter_redirect():
-    return redirect(objects.settings.TWITTER)
+    return redirect(common.settings.TWITTER)
 
 @frontend.route('/instagram')
 @frontend.route('/ig')
 async def instagram_redirect():
-    return redirect(objects.settings.INSTAGRAM)
+    return redirect(common.settings.INSTAGRAM)
 
 # profile customisation
 BANNERS_PATH = Path.cwd() / '.data/banners'

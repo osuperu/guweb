@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-import objects.settings
+import common.settings
 
 from typing import Any
 from typing import cast
@@ -11,8 +11,8 @@ from sqlalchemy.dialects.mysql.mysqldb import MySQLDialect_mysqldb
 from sqlalchemy.sql.compiler import Compiled
 from sqlalchemy.sql.expression import ClauseElement
 
-from objects.logging import log
-from objects.timer import Timer
+from common.logging import log
+from common.timer import Timer
 
 
 class MySQLDialect(MySQLDialect_mysqldb):
@@ -54,7 +54,7 @@ class Database:
         with Timer() as timer:
             row = await self._database.fetch_one(query, params)
 
-        if objects.settings.DEBUG:
+        if common.settings.DEBUG:
             time_elapsed = timer.elapsed()
             log(
                 f"Executed SQL query: {query} {params} in {time_elapsed * 1000:.2f} msec.",
@@ -78,7 +78,7 @@ class Database:
         with Timer() as timer:
             rows = await self._database.fetch_all(query, params)
 
-        if objects.settings.DEBUG:
+        if common.settings.DEBUG:
             time_elapsed = timer.elapsed()
             log(
                 f"Executed SQL query: {query} {params} in {time_elapsed * 1000:.2f} msec.",
@@ -103,7 +103,7 @@ class Database:
         with Timer() as timer:
             val = await self._database.fetch_val(query, params, column)
 
-        if objects.settings.DEBUG:
+        if common.settings.DEBUG:
             time_elapsed = timer.elapsed()
             log(
                 f"Executed SQL query: {query} {params} in {time_elapsed * 1000:.2f} msec.",
@@ -123,7 +123,7 @@ class Database:
         with Timer() as timer:
             rec_id = await self._database.execute(query, params)
 
-        if objects.settings.DEBUG:
+        if common.settings.DEBUG:
             time_elapsed = timer.elapsed()
             log(
                 f"Executed SQL query: {query} {params} in {time_elapsed * 1000:.2f} msec.",
@@ -145,7 +145,7 @@ class Database:
         with Timer() as timer:
             await self._database.execute_many(query, params)
 
-        if objects.settings.DEBUG:
+        if common.settings.DEBUG:
             time_elapsed = timer.elapsed()
             log(
                 f"Executed SQL query: {query} {params} in {time_elapsed * 1000:.2f} msec.",

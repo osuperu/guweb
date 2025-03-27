@@ -1,18 +1,19 @@
 # -*- coding: utf-8 -*-
 
-import objects.settings
+import common.settings
 
 from typing import Optional
 from typing import TYPE_CHECKING
 
-from objects.logging import Ansi
-from objects.logging import log
+from common.logging import Ansi
+from common.logging import log
 from pathlib import Path
 from quart import render_template
 from quart import session
 
-from objects import glob
-from objects import utils
+from common import utils
+
+import state.clients
 
 if TYPE_CHECKING:
     from PIL.Image import Image
@@ -70,14 +71,14 @@ async def fetch_geoloc(ip: str) -> str:
     """Fetches the country code corresponding to an IP."""
     url = f'http://ip-api.com/line/{ip}'
 
-    async with glob.http.get(url) as resp:
+    async with state.clients.http_client.get(url) as resp:
         if not resp or resp.status != 200:
-            if objects.settings.DEBUG:
+            if common.settings.DEBUG:
                 log('Failed to get geoloc data: request failed.', Ansi.LRED)
             return 'xx'
         status, *lines = (await resp.text()).split('\n')
         if status != 'success':
-            if objects.settings.DEBUG:
+            if common.settings.DEBUG:
                 log(f'Failed to get geoloc data: {lines[0]}.', Ansi.LRED)
             return 'xx'
         return lines[1].lower()
@@ -87,13 +88,13 @@ async def validate_captcha(data: str) -> bool:
     url = f'https://hcaptcha.com/siteverify'
 
     request_data = {
-        'secret': objects.settings.HCAPTCHA_SECRET,
+        'secret': common.settings.HCAPTCHA_SECRET,
         'response': data
     }
 
-    async with glob.http.post(url, data=request_data) as resp:
+    async with state.clients.http_client.post(url, data=request_data) as resp:
         if not resp or resp.status != 200:
-            if objects.settings.DEBUG:
+            if common.settings.DEBUG:
                 log('Failed to verify captcha: request failed.', Ansi.LRED)
             return False
 

@@ -4,15 +4,13 @@ import datetime
 import logging.config
 import re
 
-import objects.settings
+import common.settings
 
 from collections.abc import Mapping
 from enum import IntEnum
 from zoneinfo import ZoneInfo
 
 import yaml
-
-from objects import glob
 
 
 def configure_logging() -> None:
@@ -83,7 +81,7 @@ def log(
     else:
         log_level = logging.INFO
 
-    if objects.settings.LOG_WITH_COLORS:
+    if common.settings.LOG_WITH_COLORS:
         color_prefix = f"{start_color!r}" if start_color is not None else ""
         color_suffix = f"{Ansi.RESET!r}" if start_color is not None else ""
     else:

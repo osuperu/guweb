@@ -6,8 +6,8 @@ from urllib.parse import quote
 
 from dotenv import load_dotenv
 
-from objects.settings_utils import read_bool
-from objects.settings_utils import read_list
+from common.settings_utils import read_bool
+from common.settings_utils import read_list
 
 load_dotenv()
 

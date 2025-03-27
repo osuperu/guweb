@@ -6,59 +6,60 @@ __all__ = ()
 import os
 
 import aiohttp
-import objects.logging
-import objects.settings
+import common.logging
+import common.settings
 import orjson
+import state
 from quart import Quart
 from quart import render_template
 
-from objects.logging import Ansi
-from objects.logging import log
+from common.logging import Ansi
+from common.logging import log
 
 from adapters.database import Database
 
-from objects import glob
+import state.clients
+
 
 app = Quart(__name__)
 
-objects.logging.configure_logging()
+common.logging.configure_logging()
 
 # used to secure session data.
 # we recommend using a long randomly generated ascii string.
-app.secret_key = objects.settings.SECRET_KEY
+app.secret_key = common.settings.SECRET_KEY
 
 @app.before_serving
 async def mysql_conn() -> None:
-    glob.db = Database(objects.settings.DB_DSN)
-    await glob.db.connect()
+    await state.clients.database.connect()
     log('Connected to MySQL!', Ansi.LGREEN)
 
 @app.before_serving
 async def http_conn() -> None:
-    glob.http = aiohttp.ClientSession(json_serialize=lambda x: orjson.dumps(x).decode())
+    state.clients.http_client = aiohttp.ClientSession(json_serialize=lambda x: orjson.dumps(x).decode())
     log('Got our Client Session!', Ansi.LGREEN)
 
 @app.after_serving
 async def shutdown() -> None:
-    await glob.db.disconnect()
-    await glob.http.close()
+    await state.clients.database.disconnect()
+    await state.clients.http_client.close()
 
 # globals which can be used in template code
 @app.template_global()
 def appVersion() -> str:
-    return objects.settings.VERSION
+    return common.settings.VERSION
 
 @app.template_global()
 def appName() -> str:
-    return objects.settings.APP_NAME
+    return common.settings.APP_NAME
 
 @app.template_global()
 def captchaKey() -> str:
-    return objects.settings.HCAPTCHA_SITE_KEY
+    return common.settings.HCAPTCHA_SITE_KEY
 
 @app.template_global()
 def domain() -> str:
-    return objects.settings.DOMAIN
+    return common.settings.DOMAIN
 
 from blueprints.frontend import frontend
 app.register_blueprint(frontend)
@@ -74,7 +75,7 @@ async def page_not_found(e):
 if __name__ == '__main__':
     os.chdir(os.path.dirname(os.path.realpath(__file__)))
     app.run(
-        host=objects.settings.APP_HOST,
-        port=objects.settings.APP_PORT,
-        debug=objects.settings.DEBUG
+        host=common.settings.APP_HOST,
+        port=common.settings.APP_PORT,
+        debug=common.settings.DEBUG
     ) # blocking call
