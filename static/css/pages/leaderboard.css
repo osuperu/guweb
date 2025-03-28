@@ -42,7 +42,17 @@ a:hover {
   border-radius: 5px;
 }
 
+.leaderboard-column:first-child .column-player-rank {
+  color: rgb(247, 200, 45) !important;
+}
 
+.leaderboard-column:nth-child(2) .column-player-rank {
+  color: rgb(192, 192, 192) !important;
+}
+
+.leaderboard-column:nth-child(3) .column-player-rank {
+  color: rgb(192, 136, 99) !important;
+}
 
 .leaderboard-main-bg {
   border-bottom-right-radius: 8px;
