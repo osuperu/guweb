@@ -1,5 +1,6 @@
 {% extends 'base.html' %}
-{% block title %} Profile {% endblock %}
+{% block title %}Profile
+{% endblock %}
 
 {% macro scores(title, id) %}
 <div class="log-block" v-bind:class="{ 'load' : data.scores.{{ id }}.load }">
@@ -19,7 +20,7 @@
                     </div>
                     <div class="map-title-block">
                         <div class="map-title">
-                            <a class="beatmap-link">
+                            <a class="beatmap-link" :href="'/b/' + map.beatmap.id">
                                 <% map.beatmap.artist %> - <% map.beatmap.title %> [<% map.beatmap.version %>] <!--<span v-if="map.mods != 0">+ <% modsStr(map.mods) %></span>-->
                             </a>
                         </div>
@@ -37,6 +38,9 @@
                     <div class="score-details d-flex">
                         <div class="score-details_right-block">
                             <div class="score-details_pp-block">
+                                <div class="map-mods">
+                                    <% ("+ " + map[`mods_readable`] + " ").replace("NM", "").replace("RXNC", "NCRX").replace("APNC", "NCAP").replace("HDHRNC", "HDNCHR").replace("NFNC", "NCNF").replace("RX", "").replace("AP", "").replace("DTNC", "NC").replace("+  ", "").replace("+ ", "+") %>
+                                </div>
                                 <div class="map-pp">
                                     <% map.pp.toFixed() %><span class="map-pp-unit">pp</span>
                                 </div>
@@ -50,6 +54,9 @@
                                         <% map.grade.replace("X", "SS" ).replace("H", "" ) %>
                                     </div>
                                 </div>
+                            </div>
+                            <div class="download-replay">
+                                <a :href="'https://api.{{ domain() }}/v1/get_replay?id=' + map.id" class="fa-solid fa-download"></a>
                             </div>
                         </div>
                     </div>
